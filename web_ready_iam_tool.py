@@ -657,8 +657,13 @@ class IntelligentAnalyzer:
     def _make_ai_request(self, prompt, request_type, max_tokens=2000):
         """Make AI request with retries and error handling"""
         
+        st.write(f"🔄 Making {request_type} request to OpenAI...")
+        st.write(f"📊 Prompt length: {len(prompt)} characters")
+        
         for attempt in range(self.max_retries):
             try:
+                st.write(f"🔄 Attempt {attempt + 1}/{self.max_retries}")
+                
                 response = self.client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[
@@ -669,31 +674,37 @@ class IntelligentAnalyzer:
                     max_tokens=max_tokens
                 )
                 
+                st.write("✅ Got response from OpenAI")
+                st.write(f"📊 Response length: {len(response.choices[0].message.content)} characters")
+                
                 result = self._extract_and_validate_json(response.choices[0].message.content)
                 if result:
+                    st.write("✅ Successfully parsed JSON response")
                     return result
                 else:
-                    st.warning(f"Invalid JSON response from AI (attempt {attempt + 1})")
+                    st.warning(f"⚠️ Invalid JSON response from AI (attempt {attempt + 1})")
+                    st.write("**Raw response preview:**")
+                    st.code(response.choices[0].message.content[:500] + "...")
                     
             except openai.RateLimitError:
                 if attempt < self.max_retries - 1:
-                    st.warning(f"Rate limit hit. Retrying in {self.retry_delay} seconds...")
+                    st.warning(f"⚠️ Rate limit hit. Retrying in {self.retry_delay} seconds...")
                     time.sleep(self.retry_delay)
                     self.retry_delay *= 2  # Exponential backoff
                 else:
-                    st.error("Rate limit exceeded. Please try again later.")
+                    st.error("❌ Rate limit exceeded. Please try again later.")
                     return None
                     
             except openai.APIConnectionError:
-                st.error("Connection error. Please check your internet.")
+                st.error("❌ Connection error. Please check your internet.")
                 return None
                 
             except Exception as e:
                 if attempt < self.max_retries - 1:
-                    st.warning(f"AI request failed (attempt {attempt + 1}): {str(e)}")
+                    st.warning(f"⚠️ AI request failed (attempt {attempt + 1}): {str(e)}")
                     time.sleep(1)
                 else:
-                    st.error(f"AI request failed after {self.max_retries} attempts: {str(e)}")
+                    st.error(f"❌ AI request failed after {self.max_retries} attempts: {str(e)}")
                     return None
         
         return None
@@ -1454,8 +1465,18 @@ def main():
                     with col2:
                         button_text = "🚀 Run Contextual Analysis" if user_responses else "⚡ Run Basic Analysis"
                         if st.button(button_text, type="primary"):
+                            # Debug info
+                            st.write("**Debug Info:**")
+                            st.write(f"- User responses collected: {len(user_responses)}")
+                            st.write(f"- Pattern analysis available: {'Yes' if st.session_state.pattern_analysis else 'No'}")
+                            st.write(f"- Extracted data available: {'Yes' if st.session_state.extracted_data else 'No'}")
+                            st.write(f"- OpenAI client ready: {'Yes' if st.session_state.openai_client else 'No'}")
+                            
                             if safe_step_transition('analysis'):
+                                st.success("✅ Transitioning to analysis step...")
                                 st.rerun()
+                            else:
+                                st.error("❌ Failed to transition to analysis step")
                 
                 except Exception as e:
                     st.error(f"Question generation failed: {str(e)}")
@@ -1475,39 +1496,89 @@ def main():
         elif st.session_state.step == 'analysis':
             st.header("🤖 Running Intelligent Analysis...")
             
+            # Debug information
+            st.write("**Analysis Debug Info:**")
+            st.write(f"- Current step: {st.session_state.step}")
+            st.write(f"- Has extracted data: {'Yes' if st.session_state.extracted_data else 'No'}")
+            st.write(f"- Has pattern analysis: {'Yes' if st.session_state.pattern_analysis else 'No'}")
+            st.write(f"- Has OpenAI client: {'Yes' if st.session_state.openai_client else 'No'}")
+            
             try:
+                # Show what we're about to analyze
+                if st.session_state.extracted_data:
+                    st.write(f"- Data sources found: {len(st.session_state.extracted_data)}")
+                    for source in list(st.session_state.extracted_data.keys())[:5]:
+                        st.write(f"  • {source}")
+                
                 with st.spinner("AI is performing contextual IAM analysis..."):
+                    st.write("🔄 Initializing analyzer...")
                     analyzer = IntelligentAnalyzer(st.session_state.openai_client)
                     
+                    st.write("🔄 Getting user responses...")
                     user_responses = st.session_state.user_context.get('responses', [])
+                    st.write(f"Found {len(user_responses)} user responses")
+                    
+                    st.write("🔄 Starting AI analysis...")
                     analysis_results = analyzer.perform_analysis(
                         st.session_state.extracted_data,
                         st.session_state.pattern_analysis,
                         user_responses
                     )
                     
+                    st.write("🔄 Storing results...")
                     st.session_state.analysis_results = analysis_results
+                    st.write("🔄 Analysis complete!")
                 
-                st.success("✅ Analysis complete!")
-                if safe_step_transition('results', ['analysis_results']):
-                    st.rerun()
+                if st.session_state.analysis_results:
+                    st.success("✅ Analysis complete!")
+                    st.write("**Preview of results:**")
+                    st.write(f"- Executive summary: {len(st.session_state.analysis_results.get('executive_summary', ''))}")
+                    st.write(f"- Violations found: {len(st.session_state.analysis_results.get('violations', []))}")
+                    st.write(f"- Statistics available: {'Yes' if st.session_state.analysis_results.get('statistics') else 'No'}")
+                    
+                    if safe_step_transition('results', ['analysis_results']):
+                        st.write("🔄 Transitioning to results...")
+                        time.sleep(1)  # Give user time to see the message
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to transition to results")
+                        st.write("**Manual Continue:**")
+                        if st.button("➡️ Continue to Results Manually"):
+                            st.session_state.step = 'results'
+                            st.rerun()
+                else:
+                    st.error("❌ Analysis returned no results")
+                    st.write("Debugging analysis results:")
+                    st.write(st.session_state.analysis_results)
             
             except Exception as e:
                 st.error(f"Analysis failed: {str(e)}")
                 st.session_state.error_state = str(e)
                 
+                # Show full error details
+                st.write("**Full error details:**")
+                st.code(traceback.format_exc())
+                
                 # Provide fallback
-                if st.button("Continue with Manual Review Guidance"):
-                    st.session_state.analysis_results = {
-                        "executive_summary": "Automated analysis failed. Manual review recommended.",
-                        "violations": [],
-                        "statistics": {"total_users": 0, "total_violations": 0, "critical_count": 0, "high_count": 0, "medium_count": 0, "low_count": 0, "risk_score": 0, "compliance_score": 0},
-                        "insights": ["Analysis failed - manual review needed"],
-                        "recommendations": {"immediate": [], "short_term": ["Conduct manual IAM review"], "long_term": ["Implement proper IAM tools"]},
-                        "follow_up": []
-                    }
-                    if safe_step_transition('results'):
+                st.write("**Fallback Options:**")
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("🔄 Retry Analysis"):
                         st.rerun()
+                
+                with col2:
+                    if st.button("📋 Continue with Manual Review Guidance"):
+                        st.session_state.analysis_results = {
+                            "executive_summary": "Automated analysis failed. Manual review recommended.",
+                            "violations": [],
+                            "statistics": {"total_users": 0, "total_violations": 0, "critical_count": 0, "high_count": 0, "medium_count": 0, "low_count": 0, "risk_score": 0, "compliance_score": 0},
+                            "insights": ["Analysis failed - manual review needed"],
+                            "recommendations": {"immediate": [], "short_term": ["Conduct manual IAM review"], "long_term": ["Implement proper IAM tools"]},
+                            "follow_up": []
+                        }
+                        if safe_step_transition('results'):
+                            st.rerun()
         
         # Step 5: Results Display  
         elif st.session_state.step == 'results':
