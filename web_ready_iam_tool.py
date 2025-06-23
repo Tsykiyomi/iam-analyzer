@@ -9,14 +9,22 @@ import pandas as pd
 import io
 import json
 import traceback
-import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime
 from dotenv import load_dotenv
 import os
 from typing import Dict, List, Tuple, Optional, Any
 from openai import OpenAI
 import openai
+
+# Try to import plotly, fall back to matplotlib if not available
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    PLOTLY_AVAILABLE = False
 
 # Load environment variables
 load_dotenv()
@@ -114,15 +122,45 @@ def setup_sidebar() -> Tuple[str, str, float, int]:
     
     # API Configuration
     st.sidebar.subheader("⚙️ AI Configuration")
-    api_key = st.sidebar.text_input(
-        "OpenAI API Key:", 
-        type="password",
-        help="Your API key is kept secure and only used for this session"
-    )
     
+    # Check for API key in Streamlit secrets first
+    api_key = None
+    api_source = None
+    
+    try:
+        # Try to get API key from secrets
+        if "OPENAI_API_KEY" in st.secrets:
+            api_key = st.secrets["OPENAI_API_KEY"]
+            api_source = "secrets"
+            st.sidebar.success("🔑 Using API key from Streamlit secrets")
+        elif "openai_api_key" in st.secrets:  # Alternative naming
+            api_key = st.secrets["openai_api_key"]
+            api_source = "secrets"
+            st.sidebar.success("🔑 Using API key from Streamlit secrets")
+    except Exception:
+        pass
+    
+    # If no secrets found, ask for manual input
+    if not api_key:
+        api_key = st.sidebar.text_input(
+            "OpenAI API Key:", 
+            type="password",
+            help="Enter your API key or configure it in Streamlit secrets for automatic use"
+        )
+        api_source = "manual"
+        
+        if api_key:
+            st.sidebar.info("💡 Tip: Add your API key to Streamlit secrets to avoid entering it each time")
+    
+    # Validate API key
     if api_key and not validate_api_key(api_key):
         st.sidebar.error("❌ Invalid API key format")
         return None, None, None, None
+    
+    # Show API key status
+    if api_key:
+        masked_key = f"sk-...{api_key[-4:]}" if len(api_key) > 8 else "sk-****"
+        st.sidebar.text(f"🔐 Key: {masked_key} ({api_source})")
     
     # Advanced settings
     with st.sidebar.expander("🎛️ Advanced Settings"):
@@ -259,38 +297,53 @@ def run_gpt_analysis(data_summary: str, tasks: List[str], client: OpenAI, model:
     return None
 
 def create_risk_dashboard(json_data: Dict[str, Any]):
-    """Create interactive risk visualization dashboard"""
-    st.subheader("📊 Interactive Risk Dashboard")
+    """Create risk visualization dashboard (Plotly or Matplotlib)"""
+    st.subheader("📊 Risk Dashboard")
     
     # Risk Score Gauge
     risk_score = json_data.get("risk_score", 0)
     col1, col2 = st.columns([1, 2])
     
     with col1:
-        # Risk gauge
-        fig_gauge = go.Figure(go.Indicator(
-            mode = "gauge+number+delta",
-            value = risk_score,
-            domain = {'x': [0, 1], 'y': [0, 1]},
-            title = {'text': "Overall Risk Score"},
-            delta = {'reference': 5},
-            gauge = {
-                'axis': {'range': [None, 10]},
-                'bar': {'color': "darkblue"},
-                'steps': [
-                    {'range': [0, 3], 'color': "lightgreen"},
-                    {'range': [3, 7], 'color': "yellow"},
-                    {'range': [7, 10], 'color': "lightcoral"}
-                ],
-                'threshold': {
-                    'line': {'color': "red", 'width': 4},
-                    'thickness': 0.75,
-                    'value': 8
+        if PLOTLY_AVAILABLE:
+            # Interactive Plotly gauge
+            fig_gauge = go.Figure(go.Indicator(
+                mode = "gauge+number+delta",
+                value = risk_score,
+                domain = {'x': [0, 1], 'y': [0, 1]},
+                title = {'text': "Overall Risk Score"},
+                delta = {'reference': 5},
+                gauge = {
+                    'axis': {'range': [None, 10]},
+                    'bar': {'color': "darkblue"},
+                    'steps': [
+                        {'range': [0, 3], 'color': "lightgreen"},
+                        {'range': [3, 7], 'color': "yellow"},
+                        {'range': [7, 10], 'color': "lightcoral"}
+                    ],
+                    'threshold': {
+                        'line': {'color': "red", 'width': 4},
+                        'thickness': 0.75,
+                        'value': 8
+                    }
                 }
-            }
-        ))
-        fig_gauge.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig_gauge, use_container_width=True)
+            ))
+            fig_gauge.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
+            st.plotly_chart(fig_gauge, use_container_width=True)
+        else:
+            # Simple matplotlib gauge alternative
+            fig, ax = plt.subplots(figsize=(6, 4))
+            colors = ['green' if risk_score <= 3 else 'orange' if risk_score <= 7 else 'red']
+            bars = ax.barh(['Risk Score'], [risk_score], color=colors)
+            ax.set_xlim(0, 10)
+            ax.set_xlabel('Risk Level (0-10)')
+            ax.set_title(f'Overall Risk Score: {risk_score}/10')
+            
+            # Add text annotation
+            ax.text(risk_score + 0.1, 0, f'{risk_score}', va='center', fontweight='bold')
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close()
     
     with col2:
         # Risk distribution chart
@@ -300,16 +353,45 @@ def create_risk_dashboard(json_data: Dict[str, Any]):
             if "Count" in df_dist.columns:
                 df_dist["Count"] = pd.to_numeric(df_dist["Count"], errors='coerce')
             
-            fig_bar = px.bar(
-                df_dist, 
-                x="Entity" if "Entity" in df_dist.columns else df_dist.columns[0],
-                y="Count" if "Count" in df_dist.columns else None,
-                color="RiskLevel" if "RiskLevel" in df_dist.columns else None,
-                title="Risk Distribution by Entity Type",
-                color_discrete_map=RISK_COLORS
-            )
-            fig_bar.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig_bar, use_container_width=True)
+            if PLOTLY_AVAILABLE:
+                fig_bar = px.bar(
+                    df_dist, 
+                    x="Entity" if "Entity" in df_dist.columns else df_dist.columns[0],
+                    y="Count" if "Count" in df_dist.columns else None,
+                    color="RiskLevel" if "RiskLevel" in df_dist.columns else None,
+                    title="Risk Distribution by Entity Type",
+                    color_discrete_map=RISK_COLORS
+                )
+                fig_bar.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
+                st.plotly_chart(fig_bar, use_container_width=True)
+            else:
+                # Matplotlib fallback
+                fig, ax = plt.subplots(figsize=(8, 4))
+                if "RiskLevel" in df_dist.columns:
+                    risk_counts = df_dist.groupby("RiskLevel")["Count"].sum() if "Count" in df_dist.columns else df_dist["RiskLevel"].value_counts()
+                    colors = [RISK_COLORS.get(level, 'blue') for level in risk_counts.index]
+                    bars = ax.bar(risk_counts.index, risk_counts.values, color=colors)
+                    ax.set_title("Risk Distribution by Level")
+                    ax.set_ylabel("Count")
+                    
+                    # Add value labels on bars
+                    for bar in bars:
+                        height = bar.get_height()
+                        ax.text(bar.get_x() + bar.get_width()/2., height,
+                               f'{int(height)}', ha='center', va='bottom')
+                else:
+                    # Simple bar chart
+                    x_col = df_dist.columns[0]
+                    y_col = "Count" if "Count" in df_dist.columns else df_dist.columns[1]
+                    ax.bar(df_dist[x_col], df_dist[y_col])
+                    ax.set_title("Risk Distribution")
+                    ax.set_xlabel(x_col)
+                    ax.set_ylabel(y_col)
+                
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close()
     
     # Compliance status table
     compliance = json_data.get("compliance_status", [])
@@ -473,6 +555,10 @@ def main():
     """Main application logic"""
     # Initialize session state
     initialize_session_state()
+    
+    # Show plotly warning if needed
+    if not PLOTLY_AVAILABLE:
+        st.info("📊 Enhanced charts disabled. Install plotly for better visualizations: `pip install plotly`")
     
     # Setup sidebar and get configuration
     api_config = setup_sidebar()
