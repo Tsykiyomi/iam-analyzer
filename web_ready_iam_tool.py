@@ -300,117 +300,157 @@ def create_risk_dashboard(json_data: Dict[str, Any]):
     """Create risk visualization dashboard (Plotly or Matplotlib)"""
     st.subheader("📊 Risk Dashboard")
     
-    # Risk Score Gauge
-    risk_score = json_data.get("risk_score", 0)
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        if PLOTLY_AVAILABLE:
-            # Interactive Plotly gauge
-            fig_gauge = go.Figure(go.Indicator(
-                mode = "gauge+number+delta",
-                value = risk_score,
-                domain = {'x': [0, 1], 'y': [0, 1]},
-                title = {'text': "Overall Risk Score"},
-                delta = {'reference': 5},
-                gauge = {
-                    'axis': {'range': [None, 10]},
-                    'bar': {'color': "darkblue"},
-                    'steps': [
-                        {'range': [0, 3], 'color': "lightgreen"},
-                        {'range': [3, 7], 'color': "yellow"},
-                        {'range': [7, 10], 'color': "lightcoral"}
-                    ],
-                    'threshold': {
-                        'line': {'color': "red", 'width': 4},
-                        'thickness': 0.75,
-                        'value': 8
-                    }
-                }
-            ))
-            fig_gauge.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
-            st.plotly_chart(fig_gauge, use_container_width=True)
-        else:
-            # Simple matplotlib gauge alternative
-            fig, ax = plt.subplots(figsize=(6, 4))
-            colors = ['green' if risk_score <= 3 else 'orange' if risk_score <= 7 else 'red']
-            bars = ax.barh(['Risk Score'], [risk_score], color=colors)
-            ax.set_xlim(0, 10)
-            ax.set_xlabel('Risk Level (0-10)')
-            ax.set_title(f'Overall Risk Score: {risk_score}/10')
-            
-            # Add text annotation
-            ax.text(risk_score + 0.1, 0, f'{risk_score}', va='center', fontweight='bold')
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close()
-    
-    with col2:
-        # Risk distribution chart
-        dist = json_data.get("risk_distribution", [])
-        if dist and len(dist) > 1:
-            df_dist = pd.DataFrame(dist[1:], columns=dist[0])
-            if "Count" in df_dist.columns:
-                df_dist["Count"] = pd.to_numeric(df_dist["Count"], errors='coerce')
-            
+    try:
+        # Risk Score Gauge
+        risk_score = json_data.get("risk_score", 0)
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
             if PLOTLY_AVAILABLE:
-                fig_bar = px.bar(
-                    df_dist, 
-                    x="Entity" if "Entity" in df_dist.columns else df_dist.columns[0],
-                    y="Count" if "Count" in df_dist.columns else None,
-                    color="RiskLevel" if "RiskLevel" in df_dist.columns else None,
-                    title="Risk Distribution by Entity Type",
-                    color_discrete_map=RISK_COLORS
-                )
-                fig_bar.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
-                st.plotly_chart(fig_bar, use_container_width=True)
+                # Interactive Plotly gauge
+                fig_gauge = go.Figure(go.Indicator(
+                    mode = "gauge+number+delta",
+                    value = risk_score,
+                    domain = {'x': [0, 1], 'y': [0, 1]},
+                    title = {'text': "Overall Risk Score"},
+                    delta = {'reference': 5},
+                    gauge = {
+                        'axis': {'range': [None, 10]},
+                        'bar': {'color': "darkblue"},
+                        'steps': [
+                            {'range': [0, 3], 'color': "lightgreen"},
+                            {'range': [3, 7], 'color': "yellow"},
+                            {'range': [7, 10], 'color': "lightcoral"}
+                        ],
+                        'threshold': {
+                            'line': {'color': "red", 'width': 4},
+                            'thickness': 0.75,
+                            'value': 8
+                        }
+                    }
+                ))
+                fig_gauge.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
+                st.plotly_chart(fig_gauge, use_container_width=True)
             else:
-                # Matplotlib fallback
-                fig, ax = plt.subplots(figsize=(8, 4))
-                if "RiskLevel" in df_dist.columns:
-                    risk_counts = df_dist.groupby("RiskLevel")["Count"].sum() if "Count" in df_dist.columns else df_dist["RiskLevel"].value_counts()
-                    colors = [RISK_COLORS.get(level, 'blue') for level in risk_counts.index]
-                    bars = ax.bar(risk_counts.index, risk_counts.values, color=colors)
-                    ax.set_title("Risk Distribution by Level")
-                    ax.set_ylabel("Count")
-                    
-                    # Add value labels on bars
-                    for bar in bars:
-                        height = bar.get_height()
-                        ax.text(bar.get_x() + bar.get_width()/2., height,
-                               f'{int(height)}', ha='center', va='bottom')
-                else:
-                    # Simple bar chart
-                    x_col = df_dist.columns[0]
-                    y_col = "Count" if "Count" in df_dist.columns else df_dist.columns[1]
-                    ax.bar(df_dist[x_col], df_dist[y_col])
-                    ax.set_title("Risk Distribution")
-                    ax.set_xlabel(x_col)
-                    ax.set_ylabel(y_col)
+                # Simple matplotlib gauge alternative
+                fig, ax = plt.subplots(figsize=(6, 4))
+                colors = ['green' if risk_score <= 3 else 'orange' if risk_score <= 7 else 'red']
+                bars = ax.barh(['Risk Score'], [risk_score], color=colors)
+                ax.set_xlim(0, 10)
+                ax.set_xlabel('Risk Level (0-10)')
+                ax.set_title(f'Overall Risk Score: {risk_score}/10')
                 
-                plt.xticks(rotation=45)
+                # Add text annotation
+                ax.text(risk_score + 0.1, 0, f'{risk_score}', va='center', fontweight='bold')
                 plt.tight_layout()
                 st.pyplot(fig)
                 plt.close()
-    
-    # Compliance status table
-    compliance = json_data.get("compliance_status", [])
-    if compliance and len(compliance) > 1:
-        st.subheader("🛡️ Compliance Status")
-        df_compliance = pd.DataFrame(compliance[1:], columns=compliance[0])
         
-        # Style the dataframe
-        def color_status(val):
-            if val == "Compliant":
-                return "background-color: #d4edda"
-            elif val == "Non-Compliant":
-                return "background-color: #f8d7da"
-            elif val == "Partially Compliant":
-                return "background-color: #fff3cd"
-            return ""
+        with col2:
+            # Risk distribution chart
+            dist = json_data.get("risk_distribution", [])
+            if dist and len(dist) > 1:
+                try:
+                    df_dist = pd.DataFrame(dist[1:], columns=dist[0])
+                    if "Count" in df_dist.columns:
+                        df_dist["Count"] = pd.to_numeric(df_dist["Count"], errors='coerce')
+                    
+                    if PLOTLY_AVAILABLE:
+                        fig_bar = px.bar(
+                            df_dist, 
+                            x="Entity" if "Entity" in df_dist.columns else df_dist.columns[0],
+                            y="Count" if "Count" in df_dist.columns else None,
+                            color="RiskLevel" if "RiskLevel" in df_dist.columns else None,
+                            title="Risk Distribution by Entity Type",
+                            color_discrete_map=RISK_COLORS
+                        )
+                        fig_bar.update_layout(height=300, margin=dict(l=20, r=20, t=40, b=20))
+                        st.plotly_chart(fig_bar, use_container_width=True)
+                    else:
+                        # Matplotlib fallback
+                        fig, ax = plt.subplots(figsize=(8, 4))
+                        if "RiskLevel" in df_dist.columns:
+                            risk_counts = df_dist.groupby("RiskLevel")["Count"].sum() if "Count" in df_dist.columns else df_dist["RiskLevel"].value_counts()
+                            colors = [RISK_COLORS.get(level, 'blue') for level in risk_counts.index]
+                            bars = ax.bar(risk_counts.index, risk_counts.values, color=colors)
+                            ax.set_title("Risk Distribution by Level")
+                            ax.set_ylabel("Count")
+                            
+                            # Add value labels on bars
+                            for bar in bars:
+                                height = bar.get_height()
+                                ax.text(bar.get_x() + bar.get_width()/2., height,
+                                       f'{int(height)}', ha='center', va='bottom')
+                        else:
+                            # Simple bar chart
+                            x_col = df_dist.columns[0]
+                            y_col = "Count" if "Count" in df_dist.columns else df_dist.columns[1]
+                            ax.bar(df_dist[x_col], df_dist[y_col])
+                            ax.set_title("Risk Distribution")
+                            ax.set_xlabel(x_col)
+                            ax.set_ylabel(y_col)
+                        
+                        plt.xticks(rotation=45)
+                        plt.tight_layout()
+                        st.pyplot(fig)
+                        plt.close()
+                        
+                except Exception as e:
+                    st.warning(f"Could not create risk distribution chart: {str(e)}")
+                    # Show data as table instead
+                    if dist:
+                        st.write("**Risk Distribution Data:**")
+                        df_dist = pd.DataFrame(dist[1:], columns=dist[0])
+                        st.dataframe(df_dist, use_container_width=True)
+            else:
+                st.info("No risk distribution data available")
         
-        styled_df = df_compliance.style.applymap(color_status, subset=["Status"])
-        st.dataframe(styled_df, use_container_width=True)
+        # Compliance status table
+        compliance = json_data.get("compliance_status", [])
+        if compliance and len(compliance) > 1:
+            st.subheader("🛡️ Compliance Status")
+            
+            try:
+                df_compliance = pd.DataFrame(compliance[1:], columns=compliance[0])
+                
+                # Check if Status column exists (case-insensitive)
+                status_col = None
+                for col in df_compliance.columns:
+                    if col.lower() == 'status':
+                        status_col = col
+                        break
+                
+                if status_col:
+                    # Style the dataframe only if Status column exists
+                    def color_status(val):
+                        if val == "Compliant":
+                            return "background-color: #d4edda"
+                        elif val == "Non-Compliant":
+                            return "background-color: #f8d7da"
+                        elif val == "Partially Compliant":
+                            return "background-color: #fff3cd"
+                        return ""
+                    
+                    styled_df = df_compliance.style.applymap(color_status, subset=[status_col])
+                    st.dataframe(styled_df, use_container_width=True)
+                else:
+                    # No Status column found, display without styling
+                    st.dataframe(df_compliance, use_container_width=True)
+                    
+            except Exception as e:
+                # Fallback: show compliance as text if DataFrame fails
+                st.write("**Compliance Information:**")
+                for item in compliance[1:]:
+                    st.write(f"• {' - '.join(str(x) for x in item)}")
+        else:
+            st.info("No compliance data available in this analysis.")
+            
+    except Exception as e:
+        st.error(f"Error creating dashboard: {str(e)}")
+        st.write("**Available Analysis Data:**")
+        for key, value in json_data.items():
+            if key in ["summary", "risk_score"]:
+                st.write(f"**{key.title()}:** {value}")
 
 def create_export_options(json_data: Dict[str, Any]):
     """Create download options for analysis results"""
