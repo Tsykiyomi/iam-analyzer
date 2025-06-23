@@ -1203,7 +1203,7 @@ def main():
         
         if api_key:
             if not st.session_state.api_key_validated or st.session_state.openai_client is None:
-                with st.sidebar.spinner("Validating API key..."):
+                with st.spinner("Validating API key..."):
                     client, error = validate_openai_connection(api_key)
                     
                     if client:
