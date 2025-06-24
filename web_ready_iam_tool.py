@@ -354,7 +354,9 @@ INSTRUCTIONS:
 - Create visualizations to illustrate key findings
 - Reference the actual uploaded data in your analysis
 - Provide step-by-step guidance when requested
+- **When a user requests a final deliverable (e.g., “Create a compliance report…”), output the completed report or summary text directly—do not describe your process or list steps.**
 - Always verify information against current standards using web search
+
 
 You can see all the uploaded data and should reference it specifically in your responses. When users ask questions, determine what actions to take and execute them."""
 
@@ -509,10 +511,11 @@ IMPLEMENTATION GUIDE:
         """Process user query and determine appropriate actions"""
         try:
             system_prompt = self._create_system_prompt()
-            prompt = f"""
+                        prompt = f"""
 User Query: {user_query}
 
-Based on this query and the available data, determine what actions to take and provide a comprehensive response.
+Based on this query and the available data, determine what actions to take and then produce the requested output.  
+**If the user asks for a deliverable (e.g., a report or summary), output the complete text of that deliverable directly without describing your internal process or listing steps.**
 
 Available functions:
 - analyze_data: For data analysis questions
@@ -521,9 +524,8 @@ Available functions:
 - create_visualization: For charts/graphs
 - verify_compliance: For compliance checking
 - get_file_summary: For file information
-
-Provide your analysis and any function calls needed, then give a detailed response to the user.
 """
+
             if "tracker" in st.session_state:
                 st.session_state.tracker.log_chat_interaction("advanced_query")
             try:
