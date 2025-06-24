@@ -1,4 +1,4 @@
-```python
+
 #!/usr/bin/env python3
 """
 IAM Analyzer v6 - Enterprise Edition
@@ -1541,4 +1541,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
+
