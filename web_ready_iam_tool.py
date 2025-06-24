@@ -603,6 +603,9 @@ def create_advanced_chat_interface(agent: IAMChatAgent):
             placeholder="Ask me anything about your IAM data... I can analyze, create reports, verify compliance, search for best practices, and more!",
             key="chat_input"
         )
+        def clear_chat():
+            agent.conversation_history = []
+            st.session_state["chat_input"] = ""
 
         col1, col2, col3 = st.columns([1, 1, 2])
 
@@ -623,10 +626,8 @@ def create_advanced_chat_interface(agent: IAMChatAgent):
                         st.error(f"❌ Processing failed: {result.get('error', 'Unknown error')}")
 
         with col2:
-            if st.button("🗑️ Clear Chat"):
-                agent.conversation_history = []
-                st.session_state["chat_input"] = ""
-                st.success("Chat cleared!")
+            st.button("🗑️ Clear Chat", on_click=clear_chat)
+
 
         if agent.conversation_history:
             st.markdown("### 💭 Recent Conversations")
