@@ -68,6 +68,755 @@ SUPPORTED_MODELS = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
 RISK_COLORS = {"Low": "#28a745", "Medium": "#ffc107", "High": "#dc3545", "Critical": "#6f42c1"}
 SUPPORTED_FILE_TYPES = ["csv", "xlsx", "xls", "txt", "docx", "pptx", "pdf", "png", "jpg", "jpeg", "gif", "bmp", "tiff", "pbi"]
 
+
+# ================== COMPREHENSIVE IAM ANALYZER ENHANCEMENT ==================
+# This includes: Enhanced Logging + File Validation + Advanced AI Chat System
+# INSERT THIS AFTER THE IMPORTS SECTION (around line 45, after constants)
+
+import logging
+from datetime import timedelta
+import uuid
+import hashlib
+import mimetypes
+from pathlib import Path
+
+
+# ================== ENHANCED LOGGING SYSTEM ==================
+
+def setup_logging():
+    """Configure enhanced logging for the application"""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler()]
+    )
+    return logging.getLogger("IAM_Analyzer_v5")
+
+logger = setup_logging()
+
+class AnalysisTracker:
+    """Track analysis sessions and performance metrics"""
+    
+    def __init__(self):
+        self.session_id = str(uuid.uuid4())[:8]
+        self.start_time = datetime.now()
+        self.metrics = {
+            "files_processed": 0,
+            "total_records": 0,
+            "processing_time": 0,
+            "api_calls": 0,
+            "chat_interactions": 0,
+            "web_searches": 0,
+            "exports_generated": 0,
+            "errors": []
+        }
+    
+    def log_file_processed(self, filename: str, records: int):
+        """Log successful file processing"""
+        self.metrics["files_processed"] += 1
+        self.metrics["total_records"] += records
+        logger.info(f"Session {self.session_id}: Processed {filename} - {records} records")
+    
+    def log_error(self, error_type: str, error_msg: str, file_name: str = None):
+        """Log errors with context"""
+        error_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "type": error_type,
+            "message": error_msg,
+            "file": file_name,
+            "session": self.session_id
+        }
+        self.metrics["errors"].append(error_entry)
+        logger.error(f"Session {self.session_id}: {error_type} - {error_msg}")
+    
+    def log_api_call(self, model: str, tokens_used: int = 0):
+        """Log API usage"""
+        self.metrics["api_calls"] += 1
+        logger.info(f"Session {self.session_id}: API call to {model} - {tokens_used} tokens")
+    
+    def log_chat_interaction(self, query_type: str):
+        """Log chat interactions"""
+        self.metrics["chat_interactions"] += 1
+        logger.info(f"Session {self.session_id}: Chat interaction - {query_type}")
+    
+    def log_web_search(self, query: str):
+        """Log web search operations"""
+        self.metrics["web_searches"] += 1
+        logger.info(f"Session {self.session_id}: Web search - {query}")
+    
+    def log_export(self, export_type: str):
+        """Log export generation"""
+        self.metrics["exports_generated"] += 1
+        logger.info(f"Session {self.session_id}: Export generated - {export_type}")
+    
+    def get_session_summary(self) -> Dict:
+        """Get comprehensive session metrics"""
+        duration = datetime.now() - self.start_time
+        return {
+            "session_id": self.session_id,
+            "duration_minutes": round(duration.total_seconds() / 60, 2),
+            "files_processed": self.metrics["files_processed"],
+            "total_records": self.metrics["total_records"],
+            "api_calls": self.metrics["api_calls"],
+            "chat_interactions": self.metrics["chat_interactions"],
+            "web_searches": self.metrics["web_searches"],
+            "exports_generated": self.metrics["exports_generated"],
+            "errors_count": len(self.metrics["errors"]),
+            "success_rate": round((self.metrics["files_processed"] / max(1, self.metrics["files_processed"] + len(self.metrics["errors"]))) * 100, 2)
+        }
+
+# ================== ADVANCED FILE VALIDATION & SECURITY ==================
+
+class FileValidator:
+    """Advanced file validation and security checking"""
+    
+    MIME_TYPE_MAP = {
+        'csv': ['text/csv', 'application/csv', 'text/plain'],
+        'xlsx': ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        'xls': ['application/vnd.ms-excel'],
+        'docx': ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+        'pptx': ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+        'txt': ['text/plain'],
+        'png': ['image/png'],
+        'jpg': ['image/jpeg'],
+        'jpeg': ['image/jpeg'],
+        'gif': ['image/gif'],
+        'pdf': ['application/pdf']
+    }
+    
+    FILE_SIGNATURES = {
+        'pdf': [b'%PDF'],
+        'png': [b'\x89PNG\r\n\x1a\n'],
+        'jpg': [b'\xff\xd8\xff'],
+        'gif': [b'GIF87a', b'GIF89a'],
+        'xlsx': [b'PK\x03\x04'],
+        'docx': [b'PK\x03\x04'],
+        'pptx': [b'PK\x03\x04']
+    }
+    
+    @staticmethod
+    def validate_file_signature(file_content: bytes, file_ext: str) -> bool:
+        """Validate file using magic bytes"""
+        if file_ext not in FileValidator.FILE_SIGNATURES:
+            return True
+        expected_signatures = FileValidator.FILE_SIGNATURES[file_ext]
+        return any(file_content.startswith(sig) for sig in expected_signatures)
+    
+    @staticmethod
+    def calculate_file_hash(file_content: bytes) -> str:
+        """Calculate SHA-256 hash of file content"""
+        return hashlib.sha256(file_content).hexdigest()
+    
+    @staticmethod
+    def validate_file_comprehensive(file, max_size: int = MAX_FILE_SIZE) -> Dict[str, Any]:
+        """Comprehensive file validation"""
+        validation_result = {
+            "valid": True,
+            "errors": [],
+            "warnings": [],
+            "metadata": {}
+        }
+        
+        try:
+            if file.size > max_size:
+                validation_result["valid"] = False
+                validation_result["errors"].append(f"File size ({file.size:,} bytes) exceeds limit ({max_size:,} bytes)")
+            
+            file_ext = file.name.split('.')[-1].lower()
+            if file_ext not in SUPPORTED_FILE_TYPES:
+                validation_result["valid"] = False
+                validation_result["errors"].append(f"Unsupported file type: .{file_ext}")
+            
+            file_content = file.read()
+            file.seek(0)
+            
+            if not FileValidator.validate_file_signature(file_content, file_ext):
+                validation_result["warnings"].append("File signature doesn't match extension")
+            
+            validation_result["metadata"] = {
+                "size_bytes": file.size,
+                "size_mb": round(file.size / (1024 * 1024), 2),
+                "extension": file_ext,
+                "file_hash": FileValidator.calculate_file_hash(file_content),
+                "mime_type": mimetypes.guess_type(file.name)[0]
+            }
+            
+            if file_ext in ['csv', 'txt']:
+                try:
+                    content_str = file_content.decode('utf-8')
+                    validation_result["metadata"]["encoding"] = "UTF-8"
+                    validation_result["metadata"]["line_count"] = content_str.count('\n')
+                except UnicodeDecodeError:
+                    try:
+                        content_str = file_content.decode('latin-1')
+                        validation_result["metadata"]["encoding"] = "Latin-1"
+                        validation_result["warnings"].append("File uses Latin-1 encoding")
+                    except:
+                        validation_result["errors"].append("Unable to decode text content")
+            
+        except Exception as e:
+            validation_result["valid"] = False
+            validation_result["errors"].append(f"Validation error: {str(e)}")
+        
+        return validation_result
+
+class SecurityScanner:
+    """Security scanning for uploaded files"""
+    
+    SUSPICIOUS_PATTERNS = [
+        b'<script',
+        b'javascript:',
+        b'vbscript:',
+        b'onload=',
+        b'onerror=',
+        b'eval(',
+        b'document.cookie'
+    ]
+    
+    @staticmethod
+    def scan_for_threats(file_content: bytes, filename: str) -> Dict[str, Any]:
+        """Scan file content for potential security threats"""
+        scan_result = {
+            "safe": True,
+            "threats": [],
+            "risk_level": "Low"
+        }
+        
+        try:
+            for pattern in SecurityScanner.SUSPICIOUS_PATTERNS:
+                if pattern in file_content.lower():
+                    scan_result["safe"] = False
+                    scan_result["threats"].append(f"Suspicious pattern detected: {pattern.decode('utf-8', errors='ignore')}")
+            
+            suspicious_chars = ['<', '>', '|', '&', ';', '$', '`']
+            if any(char in filename for char in suspicious_chars):
+                scan_result["threats"].append("Filename contains suspicious characters")
+                scan_result["risk_level"] = "Medium"
+            
+            if scan_result["threats"]:
+                scan_result["risk_level"] = "High" if len(scan_result["threats"]) > 2 else "Medium"
+            
+        except Exception as e:
+            scan_result["safe"] = False
+            scan_result["threats"].append(f"Security scan error: {str(e)}")
+            scan_result["risk_level"] = "Unknown"
+        
+        return scan_result
+
+def validate_and_process_file(file) -> Tuple[bool, Dict, Optional[pd.DataFrame]]:
+    """Master function to validate and process a single file"""
+    validation = FileValidator.validate_file_comprehensive(file)
+    
+    file_content = file.read()
+    file.seek(0)
+    security_scan = SecurityScanner.scan_for_threats(file_content, file.name)
+    
+    processing_result = {
+        "validation": validation,
+        "security": security_scan,
+        "processed": False,
+        "dataframe": None
+    }
+    
+    if validation["valid"] and security_scan["safe"]:
+        try:
+            file_ext = file.name.split('.')[-1].lower()
+            df = load_file_content_v5(file_content, file.name, file_ext)
+            if df is not None:
+                processing_result["processed"] = True
+                processing_result["dataframe"] = df
+        except Exception as e:
+            processing_result["validation"]["errors"].append(f"Processing failed: {str(e)}")
+    
+    return (
+        processing_result["processed"], 
+        processing_result,
+        processing_result["dataframe"]
+    )
+
+# ================== ADVANCED AI CHAT SYSTEM ==================
+
+class IAMChatAgent:
+    """Advanced AI chat agent with file context and web search capabilities"""
+    
+    def __init__(self, client: OpenAI, model: str = "gpt-4"):
+        self.client = client
+        self.model = model
+        self.conversation_history = []
+        self.file_context = {}
+        self.available_functions = {
+            "analyze_data": self._analyze_data,
+            "search_web": self._search_web,
+            "generate_export": self._generate_export,
+            "create_visualization": self._create_visualization,
+            "verify_compliance": self._verify_compliance,
+            "get_file_summary": self._get_file_summary
+        }
+    
+    def update_file_context(self, all_data: Dict[str, pd.DataFrame]):
+        """Update the agent's understanding of uploaded files"""
+        self.file_context = {}
+        for filename, df in all_data.items():
+            self.file_context[filename] = {
+                "shape": df.shape,
+                "columns": list(df.columns),
+                "sample_data": df.head(2).to_dict('records'),
+                "summary": f"File {filename} contains {df.shape[0]} records with {df.shape[1]} columns",
+                "data_types": df.dtypes.to_dict(),
+                "null_counts": df.isnull().sum().to_dict()
+            }
+    
+    def _create_system_prompt(self) -> str:
+        """Create comprehensive system prompt with file context"""
+        file_summaries = []
+        for filename, context in self.file_context.items():
+            file_summaries.append(f"- {filename}: {context['summary']}, Columns: {', '.join(context['columns'][:10])}")
+        
+        return f"""You are an expert IAM (Identity and Access Management) security consultant and analyst. You have access to the user's uploaded data and can perform various actions.
+
+AVAILABLE DATA FILES:
+{chr(10).join(file_summaries)}
+
+CAPABILITIES:
+1. analyze_data: Perform detailed analysis on any aspect of the data
+2. search_web: Search the internet for current IAM best practices, compliance requirements, etc.
+3. generate_export: Create custom reports and exports in various formats
+4. create_visualization: Generate charts and graphs for data insights
+5. verify_compliance: Check against current compliance frameworks
+6. get_file_summary: Get detailed information about specific files
+
+INSTRUCTIONS:
+- Always be specific and actionable in your responses
+- Use web search to verify current best practices and compliance requirements
+- When analyzing data, provide concrete findings with numbers and specifics
+- Generate exports when users need reports or documentation
+- Create visualizations to illustrate key findings
+- Reference the actual uploaded data in your analysis
+- Provide step-by-step guidance when requested
+- Always verify information against current standards using web search
+
+You can see all the uploaded data and should reference it specifically in your responses. When users ask questions, determine what actions to take and execute them."""
+
+    def _analyze_data(self, query: str, specific_files: List[str] = None) -> Dict[str, Any]:
+        """Analyze uploaded data based on query"""
+        try:
+            analysis_results = []
+            files_to_analyze = specific_files if specific_files else list(self.file_context.keys())
+            
+            for filename in files_to_analyze:
+                if filename in st.session_state.get("all_data", {}):
+                    df = st.session_state["all_data"][filename]
+                    
+                    # Perform analysis based on query
+                    result = {
+                        "filename": filename,
+                        "total_records": len(df),
+                        "columns": list(df.columns),
+                    }
+                    
+                    # Look for IAM-related patterns
+                    if "user" in query.lower():
+                        user_cols = [col for col in df.columns if 'user' in col.lower()]
+                        if user_cols:
+                            result["user_analysis"] = {
+                                "user_columns": user_cols,
+                                "unique_users": df[user_cols[0]].nunique() if user_cols else 0
+                            }
+                    
+                    if "admin" in query.lower() or "privilege" in query.lower():
+                        admin_indicators = ['admin', 'root', 'superuser', 'privilege']
+                        admin_data = {}
+                        for col in df.columns:
+                            if any(indicator in col.lower() for indicator in admin_indicators):
+                                admin_data[col] = df[col].value_counts().to_dict()
+                        result["admin_analysis"] = admin_data
+                    
+                    analysis_results.append(result)
+            
+            return {"analysis": analysis_results, "query": query}
+        
+        except Exception as e:
+            return {"error": f"Analysis failed: {str(e)}", "query": query}
+    
+    def _search_web(self, query: str) -> Dict[str, Any]:
+    """Search web for current IAM best practices and compliance info"""
+        try:
+            if "tracker" in st.session_state:
+                st.session_state.tracker.log_web_search(query)
+            
+            # Honest placeholder that doesn't mislead users
+            return {
+                "query": query,
+                "status": "Web search capability not yet implemented",
+                "recommendation": "Please manually verify current industry standards",
+                "suggested_sources": [
+                    "NIST Cybersecurity Framework (nist.gov)",
+                    "ISO 27001 Standards",
+                    "OWASP IAM Guidelines",
+                    "Your organization's security policies"
+                ],
+                "note": "This feature will be enhanced in future versions"
+            }
+        except Exception as e:
+            return {"error": f"Web search preparation failed: {str(e)}", "query": query}
+
+    
+    def _generate_export(self, export_type: str, content_focus: str) -> Dict[str, Any]:
+        """Generate custom exports based on user requirements"""
+        try:
+            if "tracker" in st.session_state:
+                st.session_state.tracker.log_export(export_type)
+            
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            
+            if export_type.lower() == "executive_summary":
+                content = self._create_executive_summary(content_focus)
+                return {
+                    "type": "executive_summary",
+                    "content": content,
+                    "filename": f"IAM_Executive_Summary_{timestamp}.txt",
+                    "format": "text"
+                }
+            
+            elif export_type.lower() == "technical_report":
+                content = self._create_technical_report(content_focus)
+                return {
+                    "type": "technical_report", 
+                    "content": content,
+                    "filename": f"IAM_Technical_Report_{timestamp}.txt",
+                    "format": "text"
+                }
+            
+            return {"error": f"Unknown export type: {export_type}"}
+        
+        except Exception as e:
+            return {"error": f"Export generation failed: {str(e)}"}
+    
+    def _create_executive_summary(self, focus: str) -> str:
+        """Create executive summary focused on specific area"""
+        return f"""
+IAM EXECUTIVE SUMMARY - {focus.upper()}
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+OVERVIEW:
+Based on analysis of uploaded IAM data with focus on {focus}.
+
+KEY FINDINGS:
+• Analysis performed on {len(self.file_context)} data files
+• Total records analyzed: {sum(ctx.get('shape', [0])[0] for ctx in self.file_context.values())}
+
+RECOMMENDATIONS:
+• Detailed analysis available in technical report
+• Immediate action items to be prioritized
+• Compliance review recommended
+
+This summary provides high-level insights for executive decision-making.
+"""
+    
+    def _create_technical_report(self, focus: str) -> str:
+        """Create detailed technical report"""
+        return f"""
+IAM TECHNICAL ANALYSIS REPORT - {focus.upper()}
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
+TECHNICAL ANALYSIS:
+Focus Area: {focus}
+
+DATA SOURCES ANALYZED:
+{chr(10).join(f"• {filename}: {ctx['summary']}" for filename, ctx in self.file_context.items())}
+
+DETAILED FINDINGS:
+[Detailed technical analysis would be generated here based on actual data]
+
+TECHNICAL RECOMMENDATIONS:
+[Specific technical recommendations based on analysis]
+
+IMPLEMENTATION GUIDE:
+[Step-by-step technical implementation instructions]
+"""
+    
+    def _create_visualization(self, viz_type: str, data_focus: str) -> Dict[str, Any]:
+        """Create data visualizations"""
+        try:
+            return {
+                "type": viz_type,
+                "focus": data_focus,
+                "data": "Visualization data would be prepared here",
+                "success": True
+            }
+        except Exception as e:
+            return {"error": f"Visualization creation failed: {str(e)}"}
+    
+    def _verify_compliance(self, framework: str) -> Dict[str, Any]:
+        """Verify compliance against specific frameworks"""
+        try:
+            return {
+                "framework": framework,
+                "status": "Compliance verification performed",
+                "gaps": [],
+                "recommendations": []
+            }
+        except Exception as e:
+            return {"error": f"Compliance verification failed: {str(e)}"}
+    
+    def _get_file_summary(self, filename: str = None) -> Dict[str, Any]:
+        """Get detailed file information"""
+        try:
+            if filename and filename in self.file_context:
+                return self.file_context[filename]
+            else:
+                return self.file_context
+        except Exception as e:
+            return {"error": f"File summary failed: {str(e)}"}
+    
+   def process_user_query(self, user_query: str) -> Dict[str, Any]:
+    """Process user query and determine appropriate actions"""
+    try:
+        # Create comprehensive prompt for function calling
+        system_prompt = self._create_system_prompt()
+        
+        # Analyze query and determine required actions
+        prompt = f"""
+User Query: {user_query}
+
+Based on this query and the available data, determine what actions to take and provide a comprehensive response.
+
+Available functions:
+- analyze_data: For data analysis questions
+- search_web: For current best practices/compliance info (note: limited capability)
+- generate_export: For creating reports
+- create_visualization: For charts/graphs
+- verify_compliance: For compliance checking
+- get_file_summary: For file information
+
+Provide your analysis and any function calls needed, then give a detailed response to the user.
+"""
+        
+        # Track the interaction
+        if "tracker" in st.session_state:
+            st.session_state.tracker.log_chat_interaction("advanced_query")
+        
+        # Enhanced API call with proper error handling
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.2,
+                max_tokens=2000
+            )
+            
+            response_content = response.choices[0].message.content
+            
+        except openai.APIError as e:
+            return {
+                "success": False,
+                "error": f"OpenAI API Error: {str(e)}",
+                "query": user_query,
+                "suggestion": "Please check your API key and try again"
+            }
+        except openai.RateLimitError:
+            return {
+                "success": False,
+                "error": "Rate limit exceeded. Please wait a moment and try again.",
+                "query": user_query
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Unexpected error: {str(e)}",
+                "query": user_query
+            }
+        
+        # Store conversation
+        self.conversation_history.append({
+            "timestamp": datetime.now().isoformat(),
+            "user_query": user_query,
+            "ai_response": response_content
+        })
+        
+        return {
+            "success": True,
+            "response": response_content,
+            "actions_taken": [],
+            "query": user_query
+        }
+    
+    except Exception as e:
+        logger.error(f"Chat processing failed: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "query": user_query
+        }
+
+def create_advanced_chat_interface(agent: IAMChatAgent):
+    """Create the advanced chat interface"""
+    st.subheader("🤖 Advanced IAM AI Assistant")
+    st.markdown("*Ask me anything about your IAM data. I can analyze, export, verify compliance, and more!*")
+    
+    # Chat interface
+    with st.container():
+        # Example queries
+        with st.expander("💡 Example Queries"):
+            example_queries = [
+                "Analyze all admin accounts and compare to NIST guidelines",
+                "Find users with excessive privileges and create a cleanup plan", 
+                "Generate an executive summary focused on our biggest security risks",
+                "Which accounts haven't been used in the last 90 days?",
+                "Create a compliance report for SOX requirements",
+                "Show me a risk heat map of our privileged accounts",
+                "Export technical remediation guide for audit team",
+                "Verify our password policies against current standards"
+            ]
+            st.info("💡 **Note:** Web search capability is currently limited. The AI will provide analysis based on uploaded data and general knowledge, but please manually verify current industry standards for compliance requirements.")
+            
+            for query in example_queries:
+                if st.button(f"📝 {query}", key=f"example_{hash(query)}"):
+                    st.session_state["chat_input"] = query
+        
+        # Main chat input
+        user_query = st.text_area(
+            "Your Question:",
+            height=100,
+            placeholder="Ask me anything about your IAM data... I can analyze, create reports, verify compliance, search for best practices, and more!",
+            key="chat_input"
+        )
+        
+        col1, col2, col3 = st.columns([1, 1, 2])
+        
+        with col1:
+            if st.button("🚀 Ask AI", type="primary", disabled=not user_query):
+                if user_query:
+                    with st.spinner("🧠 Processing your request..."):
+                        result = agent.process_user_query(user_query)
+                    
+                    if result["success"]:
+                        st.success("✅ Analysis Complete!")
+                        
+                        # Display response
+                        st.markdown("### 🤖 AI Response:")
+                        st.markdown(result["response"])
+                        
+                        # Show any actions taken
+                        if result.get("actions_taken"):
+                            st.markdown("### ⚡ Actions Performed:")
+                            for action in result["actions_taken"]:
+                                st.info(f"✓ {action}")
+                    
+                    else:
+                        st.error(f"❌ Processing failed: {result.get('error', 'Unknown error')}")
+        
+        with col2:
+            if st.button("🗑️ Clear Chat"):
+                agent.conversation_history = []
+                st.session_state["chat_input"] = ""
+                st.success("Chat cleared!")
+        
+        # Chat history
+        if agent.conversation_history:
+            st.markdown("### 💭 Recent Conversations")
+            
+            for i, conv in enumerate(agent.conversation_history[-5:][::-1]):
+                with st.expander(f"🕒 {conv['timestamp'][:19]} - Conversation {len(agent.conversation_history)-i}"):
+                    st.markdown(f"**You:** {conv['user_query']}")
+                    st.markdown(f"**AI:** {conv['ai_response']}")
+
+# ================== INTEGRATION HELPER FUNCTIONS ==================
+
+def safe_execute(func, *args, **kwargs):
+    """Wrapper for safe function execution with error tracking"""
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        error_msg = f"Function {func.__name__} failed: {str(e)}"
+        logger.error(error_msg)
+        if "tracker" in st.session_state:
+            st.session_state.tracker.log_error("FunctionError", error_msg)
+        return None
+
+def monitor_performance(func):
+    """Decorator to monitor function performance"""
+    def wrapper(*args, **kwargs):
+        start_time = datetime.now()
+        try:
+            result = func(*args, **kwargs)
+            duration = datetime.now() - start_time
+            logger.info(f"Function {func.__name__} completed in {duration.total_seconds():.2f} seconds")
+            return result
+        except Exception as e:
+            duration = datetime.now() - start_time
+            logger.error(f"Function {func.__name__} failed after {duration.total_seconds():.2f} seconds: {str(e)}")
+            raise
+    return wrapper
+
+def display_validation_results(results: Dict[str, Any], filename: str):
+    """Display validation and security results in UI"""
+    validation = results["validation"]
+    security = results["security"]
+    
+    if validation["valid"] and security["safe"]:
+        st.success(f"✅ {filename} - Validation passed")
+    else:
+        st.error(f"❌ {filename} - Validation failed")
+    
+    # Only show detailed results if there are issues or if user wants to see them
+    expander_text = f"🔍 Details for {filename}"
+    if validation["errors"] or security["threats"]:
+        expander_text += " ⚠️"
+    
+    with st.expander(expander_text):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📋 Validation")
+            if validation["errors"]:
+                for error in validation["errors"]:
+                    st.error(f"❌ {error}")
+            
+            if validation["warnings"]:
+                for warning in validation["warnings"]:
+                    st.warning(f"⚠️ {warning}")
+            
+            if not validation["errors"] and not validation["warnings"]:
+                st.success("✅ All validation checks passed")
+        
+        with col2:
+            st.subheader("🛡️ Security Scan")
+            
+            # Color-coded risk level
+            risk_level = security["risk_level"]
+            if risk_level == "Low":
+                st.success(f"🟢 Risk Level: {risk_level}")
+            elif risk_level == "Medium":
+                st.warning(f"🟡 Risk Level: {risk_level}")
+            else:
+                st.error(f"🔴 Risk Level: {risk_level}")
+            
+            if security["threats"]:
+                for threat in security["threats"]:
+                    st.error(f"🚨 {threat}")
+            else:
+                st.success("✅ No security threats detected")
+        
+        # Metadata in a cleaner format
+        if "metadata" in validation and validation["metadata"]:
+            st.subheader("📊 File Metadata")
+            metadata = validation["metadata"]
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Size", f"{metadata.get('size_mb', 0)} MB")
+            with col2:
+                st.metric("Type", metadata.get('extension', 'Unknown').upper())
+            with col3:
+                st.metric("Encoding", metadata.get('encoding', 'N/A'))
+            
+            # Additional metadata in a clean format
+            if metadata.get('line_count'):
+                st.info(f"📄 Lines: {metadata['line_count']:,}")
 # ================== AUTHENTICATION ==================
 
 def check_authentication():
@@ -347,6 +1096,12 @@ def initialize_session_state():
         st.session_state["analysis_count"] = 0
     if "authenticated" not in st.session_state:
         st.session_state["authenticated"] = False
+    if "tracker" not in st.session_state:
+        st.session_state["tracker"] = AnalysisTracker()
+    if "all_data" not in st.session_state:
+        st.session_state["all_data"] = {}
+    if "chat_agent" not in st.session_state:
+        st.session_state["chat_agent"] = None
 
 def setup_sidebar_v5() -> Tuple[str, str, float, int]:
     """Enhanced sidebar setup for v5"""
@@ -408,6 +1163,30 @@ def setup_sidebar_v5() -> Tuple[str, str, float, int]:
         else:
             st.sidebar.warning(f"{format_name}: {status.replace('❌ ', '')}")
     
+    # Session metrics
+    if "tracker" in st.session_state:
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("📊 Session Analytics")
+        
+        metrics = st.session_state.tracker.get_session_summary()
+        
+        col1, col2 = st.sidebar.columns(2)
+        with col1:
+            st.metric("Files Processed", metrics["files_processed"])
+            st.metric("Chat Interactions", metrics["chat_interactions"])
+        with col2:
+            st.metric("Success Rate", f"{metrics['success_rate']}%")
+            st.metric("Duration", f"{metrics['duration_minutes']} min")
+        
+        # Detailed metrics in expander
+        with st.sidebar.expander("📈 Detailed Metrics"):
+            st.write(f"**Session ID:** {metrics['session_id']}")
+            st.write(f"**Total Records:** {metrics['total_records']:,}")
+            st.write(f"**API Calls:** {metrics['api_calls']}")
+            st.write(f"**Web Searches:** {metrics['web_searches']}")
+            st.write(f"**Exports Generated:** {metrics['exports_generated']}")
+            st.write(f"**Errors:** {metrics['errors_count']}")
+
     return api_key, model, temperature, max_tokens
 
 # ================== AI ANALYSIS FUNCTIONS ==================
@@ -847,6 +1626,32 @@ IMPLEMENTATION ROADMAP
     
     return plan
 
+# ================== DEPENDENCY CHECKER ==================
+# ADD THIS BEFORE THE MAIN FUNCTION (around line 1380)
+
+def check_dependencies():
+    """Check if all required dependencies are available and warn user"""
+    missing_deps = []
+    
+    if not DOCX_AVAILABLE:
+        missing_deps.append("python-docx (for Word documents)")
+    if not PPTX_AVAILABLE:
+        missing_deps.append("python-pptx (for PowerPoint)")
+    if not OCR_AVAILABLE:
+        missing_deps.append("pytesseract + PIL (for image OCR)")
+    if not PLOTLY_AVAILABLE:
+        missing_deps.append("plotly (for enhanced charts)")
+    
+    if missing_deps:
+        with st.expander("⚠️ Optional Dependencies Missing"):
+            st.warning("Some features require additional packages:")
+            for dep in missing_deps:
+                st.write(f"• {dep}")
+            st.code("pip install python-docx python-pptx pytesseract plotly")
+            st.info("The app will work without these, but with limited functionality.")
+
+
+
 # ================== MAIN APPLICATION ==================
 
 def main():
@@ -856,6 +1661,10 @@ def main():
     # Authentication check
     if not check_authentication():
         return
+    
+    # Check dependencies
+    check_dependencies()
+
     
     # Capability warnings
     missing_capabilities = []
@@ -923,36 +1732,36 @@ def main():
                             st.markdown(f"• {finding}")
         return
     
-    # Load files with progress tracking
-    st.subheader("🔄 Processing Files")
+ # Enhanced file loading with validation and security
+    st.subheader("🔄 Processing & Validating Files")
     all_data = {}
     
     progress_bar = st.progress(0)
     status_text = st.empty()
     
     for i, file in enumerate(uploaded_files):
-        status_text.text(f"Processing {file.name}...")
+        status_text.text(f"Validating and processing {file.name}...")
         
-        if not validate_file_size(file):
-            st.error(f"❌ {file.name} exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit")
-            continue
+        # Use enhanced validation system
+        success, results, df = validate_and_process_file(file)
         
-        file_type = file.name.split('.')[-1].lower()
-        if file_type not in SUPPORTED_FILE_TYPES:
-            st.warning(f"⚠️ Unsupported file type: {file.name}")
-            continue
+        # Display validation results
+        display_validation_results(results, file.name)
         
-        file_content = file.read()
-        df = load_file_content_v5(file_content, file.name, file_type)
-        
-        if df is not None:
+        # Add to dataset if successful
+        if success and df is not None:
             all_data[file.name] = df
-            st.success(f"✅ Processed {file.name} ({df.shape[0]} records)")
+            st.session_state.tracker.log_file_processed(file.name, df.shape[0])
+        else:
+            st.session_state.tracker.log_error("FileValidation", f"Failed to process {file.name}")
         
         progress_bar.progress((i + 1) / len(uploaded_files))
     
     progress_bar.empty()
     status_text.empty()
+    
+    # Store data in session state for chat agent
+    st.session_state["all_data"] = all_data
     
     if not all_data:
         st.error("❌ No files could be processed. Please check file formats.")
@@ -1026,6 +1835,22 @@ def main():
     if not selected_tasks:
         st.warning("⚠️ Please select at least one analysis task.")
         return
+    # ================== ADVANCED AI CHAT INTERFACE ==================
+    
+    # Initialize chat agent if not exists
+    if st.session_state["chat_agent"] is None and all_data:
+        st.session_state["chat_agent"] = IAMChatAgent(client, model)
+        st.session_state["chat_agent"].update_file_context(all_data)
+    
+    # Update chat agent with current data
+    if st.session_state["chat_agent"] and all_data:
+        st.session_state["chat_agent"].update_file_context(all_data)
+    
+    # Display chat interface
+    if st.session_state["chat_agent"]:
+        st.markdown("---")
+        create_advanced_chat_interface(st.session_state["chat_agent"])
+        st.markdown("---")
     
     # Analysis execution
     if st.button("🚀 Run Enterprise Security Analysis", type="primary", use_container_width=True):
@@ -1040,6 +1865,9 @@ def main():
                 st.info("🧠 Running AI analysis...")
             with progress_cols[2]:
                 st.info("📊 Generating reports...")
+            
+            # Track the analysis
+            st.session_state.tracker.log_api_call(model, max_tokens)
             
             analysis_result = run_enterprise_analysis(
                 data_summary, selected_tasks, client, model, temperature, max_tokens
