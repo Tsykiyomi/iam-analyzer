@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-IAM Analyzer v5 - Enterprise Edition
+IAM Analyzer v6 - Enterprise Edition
 Multi-format file support + Super in-depth reporting capabilities
 """
 
@@ -569,9 +569,23 @@ IMPLEMENTATION GUIDE:
         except Exception as e:
             return {"error": f"File summary failed: {str(e)}"}
     
-   def process_user_query(self, user_query: str) -> Dict[str, Any]:
-        """Process user query and determine appropriate actions"""
-    try:
+   class IAMChatAgent:
+    """Advanced AI chat agent with file context and web search capabilities"""
+    
+    def __init__(self, client: OpenAI, model: str = "gpt-4"):
+        # method body here
+    
+    def update_file_context(self, all_data: Dict[str, pd.DataFrame]):
+        # method body here
+    
+    def _search_web(self, query: str) -> Dict[str, Any]:
+        """Search web for current IAM best practices and compliance info"""
+        # method body here
+    
+    def process_user_query(self, user_query: str) -> Dict[str, Any]:  # ← This line needs exactly 4 spaces
+        """Process user query and determine appropriate actions"""        # ← This line needs exactly 8 spaces
+        try:                                                             # ← This line needs exactly 8 spaces
+            # rest of method body with 8+ spaces
         # Create comprehensive prompt for function calling
         system_prompt = self._create_system_prompt()
         
