@@ -509,7 +509,23 @@ IMPLEMENTATION GUIDE:
 
     def process_user_query(self, user_query: str) -> Dict[str, Any]:
         """Process user query and determine appropriate actions"""
-        try:
+        try:             
+            # ──────────────────────────────────────────────────────────────
+            # SPECIAL CASE: user wants a compliance report → generate it now
+            if "compliance report" in user_query.lower():
+                # kick off the executive_summary export for SOX
+                export = self._generate_export(
+                    export_type="executive_summary",
+                    content_focus="SOX Compliance Report for the Team"
+                )
+                return {
+                    "success": True,
+                    "response": export.get("content", "Failed to generate report."),
+                    "actions_taken": ["generate_export"],
+                    "query": user_query
+                }
+            # ──────────────────────────────────────────────────────────────
+
             system_prompt = self._create_system_prompt()
             prompt = f"""
 User Query: {user_query}
@@ -900,8 +916,6 @@ def load_file_content_v5(file_content: bytes, file_name: str, file_type: str) ->
             text_content = extract_text_from_pbi(file_content)
             return pd.DataFrame({"PowerBI_Analysis": [text_content]})
         elif file_type == "pdf":
-            text_content = extract_text_from_pdf(file_content)
-            return pd.DataFrame({"PDF_Text": [text_content]})
             text_content = extract_text_from_pdf(file_content)
             return pd.DataFrame({"PDF_Text": [text_content]})
         else:
