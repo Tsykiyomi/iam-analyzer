@@ -570,7 +570,7 @@ IMPLEMENTATION GUIDE:
             return {"error": f"File summary failed: {str(e)}"}
     
    def process_user_query(self, user_query: str) -> Dict[str, Any]:
-    """Process user query and determine appropriate actions"""
+        """Process user query and determine appropriate actions"""
     try:
         # Create comprehensive prompt for function calling
         system_prompt = self._create_system_prompt()
