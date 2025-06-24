@@ -511,7 +511,7 @@ IMPLEMENTATION GUIDE:
         """Process user query and determine appropriate actions"""
         try:
             system_prompt = self._create_system_prompt()
-                        prompt = f"""
+            prompt = f"""
 User Query: {user_query}
 
 Based on this query and the available data, determine what actions to take and then produce the requested output.  
