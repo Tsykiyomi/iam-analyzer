@@ -439,7 +439,7 @@ You can see all the uploaded data and should reference it specifically in your r
             return {"error": f"Analysis failed: {str(e)}", "query": query}
     
     def _search_web(self, query: str) -> Dict[str, Any]:
-    """Search web for current IAM best practices and compliance info"""
+        """Search web for current IAM best practices and compliance info"""
         try:
             if "tracker" in st.session_state:
                 st.session_state.tracker.log_web_search(query)
