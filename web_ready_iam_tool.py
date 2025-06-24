@@ -804,22 +804,44 @@ def extract_text_from_pptx(file_content: bytes) -> str:
         return "\n".join(text_content)
     except Exception as e:
         return f"Error processing PPTX: {str(e)}"
+        
 def extract_text_from_pdf(file_content: bytes) -> str:
-    """Extract text from PDF files using PyPDF2 (install via pip install PyPDF2)"""
+    """Extract text from PDF via PyPDF2, falling back to OCR if blank."""
+    # 1) Try text‐based extraction
     try:
         from PyPDF2 import PdfReader
     except ImportError:
         return "PDF processing not available. Install PyPDF2."
+
+    text_pages = []
     try:
         reader = PdfReader(io.BytesIO(file_content))
-        pages = []
         for page in reader.pages:
-            text = page.extract_text()
-            if text:
-                pages.append(text)
-        return "\n\n".join(pages) or "No text found in PDF."
+            t = page.extract_text() or ""
+            text_pages.append(t)
     except Exception as e:
-        return f"Error processing PDF: {str(e)}"
+        text_pages = []
+
+    joined = "\n\n".join(text_pages).strip()
+    if joined:
+        return joined
+
+    # 2) If no text, fall back to OCR
+    try:
+        from pdf2image import convert_from_bytes
+    except ImportError:
+        return "PDF has no embedded text and pdf2image is not installed."
+
+    try:
+        images = convert_from_bytes(file_content)
+        ocr_text = []
+        for img in images:
+            ocr_text.append(pytesseract.image_to_string(img))
+        result = "\n\n".join(ocr_text).strip()
+        return result or "No text detected via OCR."
+    except Exception as e:
+        return f"Error during PDF OCR: {str(e)}"
+
 
 def extract_text_from_image(file_content: bytes, file_name: str) -> str:
     if not OCR_AVAILABLE:
@@ -871,15 +893,17 @@ def load_file_content_v5(file_content: bytes, file_name: str, file_type: str) ->
         elif file_type == "pptx":
             text_content = extract_text_from_pptx(file_content)
             return pd.DataFrame({"Presentation_Content": [text_content]})
-        elif file_type == "pdf":
-             text_content = extract_text_from_pdf(file_content)
-             return pd.DataFrame({"PDF_Text": [text_content]})
         elif file_type in ["png", "jpg", "jpeg", "gif", "bmp", "tiff"]:
             text_content = extract_text_from_image(file_content, file_name)
             return pd.DataFrame({"Image_OCR_Content": [text_content]})
         elif file_type == "pbi":
             text_content = extract_text_from_pbi(file_content)
             return pd.DataFrame({"PowerBI_Analysis": [text_content]})
+        elif file_type == "pdf":
+            text_content = extract_text_from_pdf(file_content)
+            return pd.DataFrame({"PDF_Text": [text_content]})
+            text_content = extract_text_from_pdf(file_content)
+            return pd.DataFrame({"PDF_Text": [text_content]})
         else:
             return None
     except Exception as e:
